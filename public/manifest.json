@@ -1,0 +1,24 @@
+{
+    "name": "MyKahfi-WEB",
+    "short_name": "MyKahfi-WEB",
+    "description": "Portal Wali Murid SIT Al Kahfi - Cek pembayaran, pesan sekolah, dan notifikasi.",
+    "start_url": "/dashboard",
+    "display": "standalone",
+    "background_color": "#F0F4F3",
+    "theme_color": "#1B6B4A",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
