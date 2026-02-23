@@ -25,6 +25,24 @@ export interface OneSignalDebugStatus {
     detail?: string;
 }
 
+async function waitForSubscriptionId(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    oneSignal: any,
+    retries = 20,
+    intervalMs = 500
+): Promise<string | null> {
+    let subscriptionId = await oneSignal.User.PushSubscription.id;
+    if (subscriptionId) return subscriptionId;
+
+    for (let i = 0; i < retries; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        subscriptionId = await oneSignal.User.PushSubscription.id;
+        if (subscriptionId) return subscriptionId;
+    }
+
+    return null;
+}
+
 function detectPlatform(): string {
     if (typeof navigator === "undefined") return "desktop_web";
     const ua = navigator.userAgent;
@@ -57,6 +75,8 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
         initialized.current = true;
         let mounted = true;
         let cleanupSubscriptionListener: (() => void) | null = null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let oneSignalRef: any = null;
 
         async function registerDevice(subscriptionId: string) {
             try {
@@ -142,6 +162,7 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                 // Dynamically load OneSignal SDK
                 const OneSignalModule = await import("react-onesignal");
                 const OneSignal = OneSignalModule.default;
+                oneSignalRef = OneSignal;
 
                 const workerChecks = await Promise.all([
                     fetch("/OneSignalSDKWorker.js", { method: "GET", cache: "no-store" }),
@@ -271,14 +292,7 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                 }
 
                 // Get subscription ID (with short retries) and register device
-                let subscriptionId = await OneSignal.User.PushSubscription.id;
-                if (!subscriptionId) {
-                    for (let i = 0; i < 20; i += 1) {
-                        await new Promise((resolve) => setTimeout(resolve, 500));
-                        subscriptionId = await OneSignal.User.PushSubscription.id;
-                        if (subscriptionId) break;
-                    }
-                }
+                const subscriptionId = await waitForSubscriptionId(OneSignal);
                 if (subscriptionId && mounted) {
                     emitStatus({
                         stage: "subscription_ready",
@@ -317,7 +331,70 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
 
         initOneSignal();
 
+        const onManualEnablePush = async () => {
+            if (!mounted || !oneSignalRef) return;
+            try {
+                emitStatus({
+                    stage: "waiting_subscription",
+                    message: "Mengaktifkan push dari aksi pengguna...",
+                    permission:
+                        typeof Notification !== "undefined"
+                            ? Notification.permission
+                            : "unsupported",
+                });
+
+                const hasPermission =
+                    typeof Notification !== "undefined" &&
+                    Notification.permission === "granted";
+                if (!hasPermission) {
+                    await oneSignalRef.Notifications.requestPermission();
+                }
+                if (!oneSignalRef.User.PushSubscription.optedIn) {
+                    await oneSignalRef.User.PushSubscription.optIn();
+                }
+
+                const subscriptionId = await waitForSubscriptionId(oneSignalRef, 20, 500);
+                if (!subscriptionId) {
+                    emitStatus({
+                        stage: "error",
+                        message: "Subscription ID belum tersedia di browser ini.",
+                        permission:
+                            typeof Notification !== "undefined"
+                                ? Notification.permission
+                                : "unsupported",
+                        detail:
+                            "Aksi manual sudah dijalankan, tapi browser belum membuat subscription.",
+                    });
+                    return;
+                }
+
+                emitStatus({
+                    stage: "subscription_ready",
+                    message: "Subscription ID ditemukan.",
+                    permission:
+                        typeof Notification !== "undefined"
+                            ? Notification.permission
+                            : "unsupported",
+                    subscriptionId,
+                });
+                await registerDevice(subscriptionId);
+            } catch (err) {
+                emitStatus({
+                    stage: "error",
+                    message: "Aktivasi push manual gagal.",
+                    permission:
+                        typeof Notification !== "undefined"
+                            ? Notification.permission
+                            : "unsupported",
+                    detail: err instanceof Error ? err.message : "unknown",
+                });
+            }
+        };
+
+        window.addEventListener("mykahfi:enable-push", onManualEnablePush);
+
         return () => {
+            window.removeEventListener("mykahfi:enable-push", onManualEnablePush);
             mounted = false;
             if (cleanupSubscriptionListener) cleanupSubscriptionListener();
         };

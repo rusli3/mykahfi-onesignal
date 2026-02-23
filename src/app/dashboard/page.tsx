@@ -270,6 +270,12 @@ export default function DashboardPage() {
                         >
                             {testingPush ? "Mengirim..." : "Test Notif"}
                         </button>
+                        <button
+                            className="btn-refresh"
+                            onClick={() => window.dispatchEvent(new Event("mykahfi:enable-push"))}
+                        >
+                            Aktifkan Push
+                        </button>
                     </div>
                 </div>
 
