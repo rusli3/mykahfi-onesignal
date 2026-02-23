@@ -4,7 +4,6 @@ import { getIronSession } from "iron-session";
 import type { SessionData } from "@/lib/session";
 
 const protectedPaths = ["/dashboard"];
-const protectedApiPaths = ["/api/dashboard", "/api/push", "/api/messages"];
 
 function getSessionPassword(): string {
     const password = process.env.SESSION_SECRET;
@@ -22,12 +21,7 @@ export async function proxy(request: NextRequest) {
         pathname.startsWith(path)
     );
 
-    // Check if this is a protected API route
-    const isProtectedApi = protectedApiPaths.some((path) =>
-        pathname.startsWith(path)
-    );
-
-    if (!isProtectedPage && !isProtectedApi) {
+    if (!isProtectedPage) {
         return NextResponse.next();
     }
 
@@ -39,13 +33,6 @@ export async function proxy(request: NextRequest) {
     });
 
     if (!session.isLoggedIn || !session.nis) {
-        if (isProtectedApi) {
-            return NextResponse.json(
-                { ok: false, error: "Sesi telah berakhir. Silakan login kembali." },
-                { status: 401 }
-            );
-        }
-
         // Redirect to login for page routes
         const loginUrl = new URL("/login", request.url);
         loginUrl.searchParams.set("expired", "1");
@@ -56,10 +43,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-    matcher: [
-        "/dashboard/:path*",
-        "/api/dashboard/:path*",
-        "/api/push/:path*",
-        "/api/messages/:path*",
-    ],
+    matcher: ["/dashboard/:path*"],
 };

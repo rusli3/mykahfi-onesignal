@@ -214,7 +214,12 @@ export async function GET(request: Request) {
             };
         }
 
-        return NextResponse.json(response);
+        return NextResponse.json(response, {
+            headers: {
+                // Private short cache helps reduce repeated server invocations per user.
+                "Cache-Control": "private, max-age=20, stale-while-revalidate=40",
+            },
+        });
     } catch (err) {
         console.error("Dashboard error:", err);
         return NextResponse.json(

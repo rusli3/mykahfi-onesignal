@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { sendNotification } from "@/lib/onesignal";
+import { getLastOneSignalAttempt, sendNotification } from "@/lib/onesignal";
 
 export async function POST(request: Request) {
     try {
@@ -36,10 +36,12 @@ export async function POST(request: Request) {
         });
 
         if (!result.success) {
+            const attempt = getLastOneSignalAttempt();
             return NextResponse.json(
                 {
                     ok: false,
                     error: result.error || "Gagal mengirim test notifikasi.",
+                    onesignal_attempt: attempt,
                 },
                 { status: 503 }
             );
