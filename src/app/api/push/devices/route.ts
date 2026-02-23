@@ -22,9 +22,7 @@ export async function GET() {
 
         const { data, error } = await supabase
             .from("user_devices_web")
-            .select(
-                "onesignal_subscription_id, external_id, platform, is_active, last_seen_at, updated_at, created_at"
-            )
+            .select("*")
             .eq("nis", nis)
             .order("last_seen_at", { ascending: false });
 
@@ -35,15 +33,22 @@ export async function GET() {
             );
         }
 
-        const devices = (data || []).map((row) => ({
-            platform: row.platform,
-            is_active: row.is_active,
-            external_id: row.external_id,
-            subscription_id_masked: mask(row.onesignal_subscription_id),
-            last_seen_at: row.last_seen_at,
-            updated_at: row.updated_at,
-            created_at: row.created_at,
-        }));
+        const devices = (data || []).map((row) => {
+            const subscriptionId =
+                typeof row.onesignal_subscription_id === "string"
+                    ? row.onesignal_subscription_id
+                    : "";
+
+            return {
+                platform: row.platform ?? null,
+                is_active: row.is_active ?? null,
+                external_id: row.external_id ?? null,
+                subscription_id_masked: mask(subscriptionId),
+                last_seen_at: row.last_seen_at ?? null,
+                updated_at: row.updated_at ?? null,
+                created_at: row.created_at ?? null,
+            };
+        });
 
         return NextResponse.json({
             ok: true,
