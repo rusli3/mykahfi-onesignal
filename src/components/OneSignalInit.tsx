@@ -186,9 +186,27 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                             ? primaryInitError.message
                             : String(primaryInitError);
 
-                    // Retry with SDK default worker strategy for desktop browsers.
-                    if (msg.toLowerCase().includes("service worker")) {
-                        await OneSignal.init(baseInitConfig);
+                    // Treat duplicate init as non-fatal and continue.
+                    if (msg.toLowerCase().includes("already initialized")) {
+                        console.warn("[OneSignal] SDK already initialized, continuing flow.");
+                    } else if (msg.toLowerCase().includes("service worker")) {
+                        // Retry with SDK default worker strategy for desktop browsers.
+                        try {
+                            await OneSignal.init(baseInitConfig);
+                        } catch (fallbackInitError) {
+                            const fallbackMsg =
+                                fallbackInitError instanceof Error
+                                    ? fallbackInitError.message
+                                    : String(fallbackInitError);
+                            if (
+                                !fallbackMsg.toLowerCase().includes("already initialized")
+                            ) {
+                                throw fallbackInitError;
+                            }
+                            console.warn(
+                                "[OneSignal] SDK already initialized during fallback, continuing flow."
+                            );
+                        }
                     } else {
                         throw primaryInitError;
                     }
