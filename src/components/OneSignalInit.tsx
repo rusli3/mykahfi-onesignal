@@ -145,6 +145,8 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                 await OneSignal.init({
                     appId: appId!,
                     allowLocalhostAsSecureOrigin: process.env.NODE_ENV === "development",
+                    serviceWorkerPath: "/OneSignalSDKWorker.js",
+                    serviceWorkerParam: { scope: "/" },
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     notifyButton: { enable: false } as any,
                 });
