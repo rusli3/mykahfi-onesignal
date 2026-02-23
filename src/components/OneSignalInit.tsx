@@ -142,14 +142,57 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                 const OneSignalModule = await import("react-onesignal");
                 const OneSignal = OneSignalModule.default;
 
-                await OneSignal.init({
+                const workerChecks = await Promise.all([
+                    fetch("/OneSignalSDKWorker.js", { method: "GET", cache: "no-store" }),
+                    fetch("/OneSignalSDKUpdaterWorker.js", {
+                        method: "GET",
+                        cache: "no-store",
+                    }),
+                ]);
+
+                const workerNotReady = workerChecks.some((res) => !res.ok);
+                if (workerNotReady) {
+                    emitStatus({
+                        stage: "error",
+                        message: "File service worker OneSignal tidak ditemukan.",
+                        permission:
+                            typeof Notification !== "undefined"
+                                ? Notification.permission
+                                : "unsupported",
+                        detail: `Worker status: ${workerChecks
+                            .map((res) => res.status)
+                            .join(", ")}`,
+                    });
+                    return;
+                }
+
+                const baseInitConfig = {
                     appId: appId!,
                     allowLocalhostAsSecureOrigin: process.env.NODE_ENV === "development",
-                    serviceWorkerPath: "/OneSignalSDKWorker.js",
-                    serviceWorkerParam: { scope: "/" },
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     notifyButton: { enable: false } as any,
-                });
+                };
+
+                try {
+                    await OneSignal.init({
+                        ...baseInitConfig,
+                        serviceWorkerPath: "/OneSignalSDKWorker.js",
+                        serviceWorkerUpdaterPath: "/OneSignalSDKUpdaterWorker.js",
+                        serviceWorkerParam: { scope: "/" },
+                    });
+                } catch (primaryInitError) {
+                    const msg =
+                        primaryInitError instanceof Error
+                            ? primaryInitError.message
+                            : String(primaryInitError);
+
+                    // Retry with SDK default worker strategy for desktop browsers.
+                    if (msg.toLowerCase().includes("service worker")) {
+                        await OneSignal.init(baseInitConfig);
+                    } else {
+                        throw primaryInitError;
+                    }
+                }
                 emitStatus({
                     stage: "initialized",
                     message: "SDK OneSignal berhasil diinisialisasi.",
