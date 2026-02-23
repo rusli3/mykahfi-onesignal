@@ -2,6 +2,7 @@
 -- Replace placeholders before executing:
 --   <VERCEL_APP_URL>       e.g. https://mykahfi-web.vercel.app
 --   <SUPABASE_WEBHOOK_SECRET> must match env SUPABASE_WEBHOOK_SECRET in Vercel
+--   <SUPABASE_SERVICE_ROLE_KEY> can be the same value as env SUPABASE_SERVICE_ROLE_KEY in Vercel
 
 drop trigger if exists on_users_msg_app_changed on public.users;
 
@@ -13,8 +14,9 @@ execute function supabase_functions.http_request(
   '<VERCEL_APP_URL>/api/push/notify-message',
   'POST',
   format(
-    '{"Content-Type":"application/json","x-webhook-secret":"%s"}',
-    '<SUPABASE_WEBHOOK_SECRET>'
+    '{"Content-Type":"application/json","x-webhook-secret":"%s","Authorization":"Bearer %s"}',
+    '<SUPABASE_WEBHOOK_SECRET>',
+    '<SUPABASE_SERVICE_ROLE_KEY>'
   ),
   '{}',
   '5000'
