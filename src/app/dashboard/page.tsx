@@ -295,6 +295,12 @@ export default function DashboardPage() {
                     <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
                         <div>Stage: <strong>{pushStatus.stage}</strong></div>
                         <div>Permission: <strong>{pushStatus.permission || "-"}</strong></div>
+                        <div>Supported: <strong>{pushStatus.supported === undefined ? "-" : String(pushStatus.supported)}</strong></div>
+                        <div>Opted-in: <strong>{pushStatus.optedIn === undefined ? "-" : String(pushStatus.optedIn)}</strong></div>
+                        <div>
+                            OneSignal ID:
+                            <strong> {pushStatus.onesignalId ? `${pushStatus.onesignalId.slice(0, 6)}...` : "-"}</strong>
+                        </div>
                         <div>
                             Subscription:
                             <strong> {pushStatus.subscriptionId ? `${pushStatus.subscriptionId.slice(0, 6)}...` : "-"}</strong>

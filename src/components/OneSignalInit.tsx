@@ -22,13 +22,16 @@ export interface OneSignalDebugStatus {
     message: string;
     permission?: NotificationPermission | "unsupported";
     subscriptionId?: string | null;
+    onesignalId?: string | null;
+    optedIn?: boolean;
+    supported?: boolean;
     detail?: string;
 }
 
 async function waitForSubscriptionId(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     oneSignal: any,
-    retries = 20,
+    retries = 40,
     intervalMs = 500
 ): Promise<string | null> {
     let subscriptionId = await oneSignal.User.PushSubscription.id;
@@ -191,6 +194,9 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                 const baseInitConfig = {
                     appId: appId!,
                     allowLocalhostAsSecureOrigin: process.env.NODE_ENV === "development",
+                    ...(process.env.NEXT_PUBLIC_ONESIGNAL_SAFARI_WEB_ID
+                        ? { safari_web_id: process.env.NEXT_PUBLIC_ONESIGNAL_SAFARI_WEB_ID }
+                        : {}),
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     notifyButton: { enable: false } as any,
                 };
@@ -237,7 +243,25 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                     stage: "initialized",
                     message: "SDK OneSignal berhasil diinisialisasi.",
                     permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+                    supported: OneSignal.Notifications.isPushSupported(),
+                    optedIn: OneSignal.User.PushSubscription.optedIn,
+                    onesignalId: OneSignal.User.onesignalId ?? null,
                 });
+
+                if (!OneSignal.Notifications.isPushSupported()) {
+                    emitStatus({
+                        stage: "error",
+                        message: "Browser tidak mendukung Web Push untuk konfigurasi ini.",
+                        permission:
+                            typeof Notification !== "undefined"
+                                ? Notification.permission
+                                : "unsupported",
+                        supported: false,
+                        detail:
+                            "Coba browser lain (Chrome/Edge terbaru) atau pastikan Safari macOS sudah versi yang mendukung Web Push.",
+                    });
+                    return;
+                }
 
                 // Set external user ID
                 await OneSignal.login(nis);
@@ -245,6 +269,9 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                     stage: "logged_in",
                     message: "OneSignal login external_id berhasil.",
                     permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+                    supported: OneSignal.Notifications.isPushSupported(),
+                    optedIn: OneSignal.User.PushSubscription.optedIn,
+                    onesignalId: OneSignal.User.onesignalId ?? null,
                 });
 
                 // Listen for subscription changes as early as possible.
@@ -276,12 +303,20 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                     stage: "waiting_subscription",
                     message: "Menyiapkan subscription push...",
                     permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+                    supported: OneSignal.Notifications.isPushSupported(),
+                    optedIn: OneSignal.User.PushSubscription.optedIn,
+                    onesignalId: OneSignal.User.onesignalId ?? null,
                 });
                 try {
                     const hasPermission =
                         typeof Notification !== "undefined" &&
                         Notification.permission === "granted";
                     if (!hasPermission) {
+                        try {
+                            await OneSignal.Slidedown.promptPush();
+                        } catch (promptErr) {
+                            console.warn("[OneSignal] Slidedown prompt warning:", promptErr);
+                        }
                         await OneSignal.Notifications.requestPermission();
                     }
                     if (!OneSignal.User.PushSubscription.optedIn) {
@@ -299,6 +334,9 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                         message: "Subscription ID ditemukan.",
                         permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
                         subscriptionId,
+                        supported: OneSignal.Notifications.isPushSupported(),
+                        optedIn: OneSignal.User.PushSubscription.optedIn,
+                        onesignalId: OneSignal.User.onesignalId ?? null,
                     });
                     await registerDevice(subscriptionId);
                 } else {
@@ -309,6 +347,9 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                             typeof Notification !== "undefined"
                                 ? Notification.permission
                                 : "unsupported",
+                        supported: OneSignal.Notifications.isPushSupported(),
+                        optedIn: OneSignal.User.PushSubscription.optedIn,
+                        onesignalId: OneSignal.User.onesignalId ?? null,
                         detail:
                             "Permission sudah granted tapi browser belum menghasilkan subscription. Coba reload sekali, atau clear site data lalu login ulang.",
                     });
@@ -324,6 +365,9 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                         typeof Notification !== "undefined"
                             ? Notification.permission
                             : "unsupported",
+                    supported: undefined,
+                    optedIn: undefined,
+                    onesignalId: null,
                     detail: err instanceof Error ? err.message : "unknown",
                 });
             }
@@ -341,12 +385,20 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                         typeof Notification !== "undefined"
                             ? Notification.permission
                             : "unsupported",
+                    supported: oneSignalRef.Notifications.isPushSupported(),
+                    optedIn: oneSignalRef.User.PushSubscription.optedIn,
+                    onesignalId: oneSignalRef.User.onesignalId ?? null,
                 });
 
                 const hasPermission =
                     typeof Notification !== "undefined" &&
                     Notification.permission === "granted";
                 if (!hasPermission) {
+                    try {
+                        await oneSignalRef.Slidedown.promptPush();
+                    } catch (promptErr) {
+                        console.warn("[OneSignal] Manual slidedown prompt warning:", promptErr);
+                    }
                     await oneSignalRef.Notifications.requestPermission();
                 }
                 if (!oneSignalRef.User.PushSubscription.optedIn) {
@@ -376,6 +428,9 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                             ? Notification.permission
                             : "unsupported",
                     subscriptionId,
+                    supported: oneSignalRef.Notifications.isPushSupported(),
+                    optedIn: oneSignalRef.User.PushSubscription.optedIn,
+                    onesignalId: oneSignalRef.User.onesignalId ?? null,
                 });
                 await registerDevice(subscriptionId);
             } catch (err) {
@@ -386,6 +441,9 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                         typeof Notification !== "undefined"
                             ? Notification.permission
                             : "unsupported",
+                    supported: oneSignalRef?.Notifications?.isPushSupported?.(),
+                    optedIn: oneSignalRef?.User?.PushSubscription?.optedIn,
+                    onesignalId: oneSignalRef?.User?.onesignalId ?? null,
                     detail: err instanceof Error ? err.message : "unknown",
                 });
             }
