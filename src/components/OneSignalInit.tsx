@@ -226,6 +226,30 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                     permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
                 });
 
+                // Listen for subscription changes as early as possible.
+                const handleSubscriptionChange = async (event: SubscriptionChangeEvent) => {
+                    const newId = event.current?.id;
+                    if (newId && mounted) {
+                        emitStatus({
+                            stage: "subscription_ready",
+                            message: "Subscription ID ditemukan.",
+                            permission:
+                                typeof Notification !== "undefined"
+                                    ? Notification.permission
+                                    : "unsupported",
+                            subscriptionId: newId,
+                        });
+                        await registerDevice(newId);
+                    }
+                };
+                OneSignal.User.PushSubscription.addEventListener("change", handleSubscriptionChange);
+                cleanupSubscriptionListener = () => {
+                    OneSignal.User.PushSubscription.removeEventListener(
+                        "change",
+                        handleSubscriptionChange
+                    );
+                };
+
                 // Ensure push subscription exists for this browser profile.
                 emitStatus({
                     stage: "waiting_subscription",
@@ -249,7 +273,7 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                 // Get subscription ID (with short retries) and register device
                 let subscriptionId = await OneSignal.User.PushSubscription.id;
                 if (!subscriptionId) {
-                    for (let i = 0; i < 5; i += 1) {
+                    for (let i = 0; i < 20; i += 1) {
                         await new Promise((resolve) => setTimeout(resolve, 500));
                         subscriptionId = await OneSignal.User.PushSubscription.id;
                         if (subscriptionId) break;
@@ -272,24 +296,9 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                                 ? Notification.permission
                                 : "unsupported",
                         detail:
-                            "Push permission boleh jadi granted, tapi subscription belum dibuat. Coba reload sekali lagi.",
+                            "Permission sudah granted tapi browser belum menghasilkan subscription. Coba reload sekali, atau clear site data lalu login ulang.",
                     });
                 }
-
-                // Listen for subscription changes
-                const handleSubscriptionChange = async (event: SubscriptionChangeEvent) => {
-                    const newId = event.current?.id;
-                    if (newId && mounted) {
-                        await registerDevice(newId);
-                    }
-                };
-                OneSignal.User.PushSubscription.addEventListener("change", handleSubscriptionChange);
-                cleanupSubscriptionListener = () => {
-                    OneSignal.User.PushSubscription.removeEventListener(
-                        "change",
-                        handleSubscriptionChange
-                    );
-                };
 
                 console.log("[OneSignal] Initialized successfully for NIS:", nis);
             } catch (err) {
