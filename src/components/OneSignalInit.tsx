@@ -15,6 +15,7 @@ export interface OneSignalDebugStatus {
         | "loading_sdk"
         | "initialized"
         | "logged_in"
+        | "waiting_subscription"
         | "subscription_ready"
         | "registered"
         | "error";
@@ -225,8 +226,35 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                     permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
                 });
 
-                // Get subscription ID and register device
-                const subscriptionId = await OneSignal.User.PushSubscription.id;
+                // Ensure push subscription exists for this browser profile.
+                emitStatus({
+                    stage: "waiting_subscription",
+                    message: "Menyiapkan subscription push...",
+                    permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+                });
+                try {
+                    const hasPermission =
+                        typeof Notification !== "undefined" &&
+                        Notification.permission === "granted";
+                    if (!hasPermission) {
+                        await OneSignal.Notifications.requestPermission();
+                    }
+                    if (!OneSignal.User.PushSubscription.optedIn) {
+                        await OneSignal.User.PushSubscription.optIn();
+                    }
+                } catch (permissionErr) {
+                    console.warn("[OneSignal] Permission/opt-in step warning:", permissionErr);
+                }
+
+                // Get subscription ID (with short retries) and register device
+                let subscriptionId = await OneSignal.User.PushSubscription.id;
+                if (!subscriptionId) {
+                    for (let i = 0; i < 5; i += 1) {
+                        await new Promise((resolve) => setTimeout(resolve, 500));
+                        subscriptionId = await OneSignal.User.PushSubscription.id;
+                        if (subscriptionId) break;
+                    }
+                }
                 if (subscriptionId && mounted) {
                     emitStatus({
                         stage: "subscription_ready",
@@ -235,6 +263,17 @@ export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProp
                         subscriptionId,
                     });
                     await registerDevice(subscriptionId);
+                } else {
+                    emitStatus({
+                        stage: "error",
+                        message: "Subscription ID belum tersedia di browser ini.",
+                        permission:
+                            typeof Notification !== "undefined"
+                                ? Notification.permission
+                                : "unsupported",
+                        detail:
+                            "Push permission boleh jadi granted, tapi subscription belum dibuat. Coba reload sekali lagi.",
+                    });
                 }
 
                 // Listen for subscription changes
