@@ -55,3 +55,43 @@ create table if not exists public.user_login_audit (
 
 create index if not exists idx_user_login_audit_nis_login_at
   on public.user_login_audit (nis, login_at desc);
+
+-- Optional performance indexes for legacy dashboard table (if exists)
+do $$
+begin
+  if to_regclass('public.transactions') is not null then
+    execute 'create index if not exists idx_transactions_nis_tgl_trx
+      on public.transactions (nis, tgl_trx desc)';
+    execute 'create index if not exists idx_transactions_nis_bulan
+      on public.transactions (nis, bulan)';
+  end if;
+end
+$$;
+
+-- Webhook payment table optimization (dashboard egress minimization)
+create index if not exists idx_bpi_webhook_spb_nis_sortasi_tgltrx
+  on public.bpi_sql_webhook_spb (nis, sortasi, tgltrx desc);
+
+-- Returns latest payment row per academic sortasi (AGU..JUN) for one NIS.
+create or replace function public.get_latest_monthly_payments_for_dashboard(p_nis text)
+returns table (
+  idtrx bigint,
+  nominal bigint,
+  tgltrx timestamptz,
+  jenjang text,
+  sortasi smallint
+)
+language sql
+stable
+as $$
+  select distinct on (t.sortasi)
+    t.idtrx,
+    t.nominal,
+    t.tgltrx,
+    t.jenjang,
+    t.sortasi
+  from public.bpi_sql_webhook_spb t
+  where t.nis = p_nis
+    and t.sortasi between 2 and 12
+  order by t.sortasi, t.tgltrx desc, t.idtrx desc;
+$$;

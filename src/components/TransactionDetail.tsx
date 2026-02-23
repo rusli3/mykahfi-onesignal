@@ -10,7 +10,6 @@ interface Transaction {
 interface TransactionDetailProps {
     month: {
         code: string;
-        label: string;
         paid: boolean;
         transaction: Transaction | null;
     };
@@ -42,15 +41,13 @@ export default function TransactionDetail({ month, onClose }: TransactionDetailP
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-handle" />
-                <h2 className="modal-title">
-                    Detail Pembayaran — {month.label}
-                </h2>
+                <h2 className="modal-title">Detail Pembayaran</h2>
 
                 {month.paid && month.transaction ? (
                     <>
                         <div className="detail-row">
                             <span className="detail-label">Bulan</span>
-                            <span className="detail-value">{month.label}</span>
+                            <span className="detail-value">{month.code}</span>
                         </div>
                         <div className="detail-row">
                             <span className="detail-label">Nominal</span>
@@ -77,7 +74,7 @@ export default function TransactionDetail({ month, onClose }: TransactionDetailP
                     <div style={{ textAlign: "center", padding: "24px 0" }}>
                         <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
                         <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
-                            Belum ada data pembayaran untuk bulan {month.label}.
+                            Belum ada data pembayaran untuk bulan {month.code}.
                         </p>
                     </div>
                 )}

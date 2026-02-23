@@ -9,7 +9,7 @@ export interface SessionData {
 }
 
 const sessionOptions: SessionOptions = {
-    password: process.env.SESSION_SECRET || "fallback-secret-change-me-immediately-32chars",
+    password: getSessionPassword(),
     cookieName: "mykahfi_session",
     cookieOptions: {
         httpOnly: true,
@@ -18,6 +18,14 @@ const sessionOptions: SessionOptions = {
         maxAge: 60 * 60 * 24 * 7, // 7 days
     },
 };
+
+function getSessionPassword(): string {
+    const password = process.env.SESSION_SECRET;
+    if (!password || password.length < 32) {
+        throw new Error("SESSION_SECRET must be set and at least 32 characters long");
+    }
+    return password;
+}
 
 export async function getSession() {
     const cookieStore = await cookies();

@@ -6,10 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "migrate:passwords": "node scripts/migrate-passwords.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
+    "bcryptjs": "^3.0.3",
     "iron-session": "^8.0.4",
     "next": "^16.1.6",
     "react": "^19.2.4",

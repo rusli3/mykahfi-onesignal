@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
 
 interface SchoolMessageProps {
     message: {
@@ -21,10 +22,22 @@ function hashMessage(text: string): string {
     return String(hash);
 }
 
-// Convert URLs in text to clickable links
-function linkifyText(text: string): string {
+// Render clickable URLs without injecting raw HTML.
+function renderTextWithLinks(text: string): ReactNode[] {
     const urlRegex = /(https?:\/\/[^\s]+)/g;
-    return text.replace(urlRegex, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+    const urlCheckRegex = /^https?:\/\/[^\s]+$/;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, idx) => {
+        if (urlCheckRegex.test(part)) {
+            return (
+                <a key={`link-${idx}`} href={part} target="_blank" rel="noopener noreferrer">
+                    {part}
+                </a>
+            );
+        }
+        return <span key={`text-${idx}`}>{part}</span>;
+    });
 }
 
 export default function SchoolMessage({ message, nis }: SchoolMessageProps) {
@@ -57,10 +70,7 @@ export default function SchoolMessage({ message, nis }: SchoolMessageProps) {
     return (
         <div className="message-card" onClick={markAsRead}>
             {isNew && <span className="message-badge">Baru</span>}
-            <div
-                className="message-text"
-                dangerouslySetInnerHTML={{ __html: linkifyText(message.text) }}
-            />
+            <div className="message-text">{renderTextWithLinks(message.text)}</div>
         </div>
     );
 }

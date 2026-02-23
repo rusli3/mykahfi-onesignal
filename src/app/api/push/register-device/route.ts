@@ -68,9 +68,18 @@ export async function POST(request: Request) {
         }
 
         // Set external_id on OneSignal
-        await setExternalId(onesignal_subscription_id, external_id || nis);
+        const externalIdSynced = await setExternalId(
+            onesignal_subscription_id,
+            external_id || nis
+        );
+        if (!externalIdSynced) {
+            console.error("Failed to sync external_id to OneSignal", {
+                nis,
+                onesignal_subscription_id,
+            });
+        }
 
-        return NextResponse.json({ ok: true });
+        return NextResponse.json({ ok: true, warning: externalIdSynced ? null : "External ID sync pending." });
     } catch (err) {
         console.error("Push register error:", err);
         return NextResponse.json(

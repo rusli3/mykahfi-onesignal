@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { SubscriptionChangeEvent } from "react-onesignal";
 
 interface OneSignalInitProps {
     nis: string;
@@ -15,16 +16,36 @@ function detectPlatform(): string {
     return "desktop_web";
 }
 
+function canInitializeOneSignal(): boolean {
+    if (typeof window === "undefined") return false;
+    const { protocol, hostname } = window.location;
+    const isHttps = protocol === "https:";
+    const isLocalhost =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "::1";
+    return isHttps || isLocalhost;
+}
+
 export default function OneSignalInit({ nis }: OneSignalInitProps) {
     const initialized = useRef(false);
 
     useEffect(() => {
         if (initialized.current) return;
         initialized.current = true;
+        let mounted = true;
+        let cleanupSubscriptionListener: (() => void) | null = null;
 
         const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
         if (!appId || appId === "your-onesignal-app-id") {
             console.log("[OneSignal] App ID not configured, skipping init.");
+            return;
+        }
+
+        if (!canInitializeOneSignal()) {
+            console.warn(
+                "[OneSignal] Skipping init: OneSignal v16 requires HTTPS (except localhost)."
+            );
             return;
         }
 
@@ -46,17 +67,24 @@ export default function OneSignalInit({ nis }: OneSignalInitProps) {
 
                 // Get subscription ID and register device
                 const subscriptionId = await OneSignal.User.PushSubscription.id;
-                if (subscriptionId) {
+                if (subscriptionId && mounted) {
                     await registerDevice(nis, subscriptionId);
                 }
 
                 // Listen for subscription changes
-                OneSignal.User.PushSubscription.addEventListener("change", async (event) => {
+                const handleSubscriptionChange = async (event: SubscriptionChangeEvent) => {
                     const newId = event.current?.id;
-                    if (newId) {
+                    if (newId && mounted) {
                         await registerDevice(nis, newId);
                     }
-                });
+                };
+                OneSignal.User.PushSubscription.addEventListener("change", handleSubscriptionChange);
+                cleanupSubscriptionListener = () => {
+                    OneSignal.User.PushSubscription.removeEventListener(
+                        "change",
+                        handleSubscriptionChange
+                    );
+                };
 
                 console.log("[OneSignal] Initialized successfully for NIS:", nis);
             } catch (err) {
@@ -65,6 +93,11 @@ export default function OneSignalInit({ nis }: OneSignalInitProps) {
         }
 
         initOneSignal();
+
+        return () => {
+            mounted = false;
+            if (cleanupSubscriptionListener) cleanupSubscriptionListener();
+        };
     }, [nis]);
 
     async function registerDevice(nis: string, subscriptionId: string) {

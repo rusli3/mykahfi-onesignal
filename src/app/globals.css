@@ -330,6 +330,18 @@ body {
   overflow: hidden;
 }
 
+.month-overdue-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85);
+  animation: overdue-dot-glow 1.4s ease-in-out infinite;
+}
+
 .month-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
@@ -465,7 +477,7 @@ body {
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   z-index: 100;
   animation: fadeIn 0.2s var(--ease);
@@ -473,10 +485,10 @@ body {
 
 .modal-content {
   background: var(--bg-card);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  border-radius: var(--radius-xl);
   padding: 28px 24px 36px;
   width: 100%;
-  max-width: var(--max-width);
+  max-width: 440px;
   animation: slideUp 0.3s var(--ease);
 }
 
@@ -810,6 +822,17 @@ body {
 @keyframes pulse-bg {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+@keyframes overdue-dot-glow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 0 0 rgba(239, 68, 68, 0.55);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 0 8px rgba(239, 68, 68, 0);
+  }
 }
 
 /* ======= Safe area (notch devices) ======= */

@@ -6,7 +6,15 @@ import type { SessionData } from "@/lib/session";
 const protectedPaths = ["/dashboard"];
 const protectedApiPaths = ["/api/dashboard", "/api/push", "/api/messages"];
 
-export async function middleware(request: NextRequest) {
+function getSessionPassword(): string {
+    const password = process.env.SESSION_SECRET;
+    if (!password || password.length < 32) {
+        throw new Error("SESSION_SECRET must be set and at least 32 characters long");
+    }
+    return password;
+}
+
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // Check if this is a protected page route
@@ -26,9 +34,7 @@ export async function middleware(request: NextRequest) {
     // Read session from cookie
     const response = NextResponse.next();
     const session = await getIronSession<SessionData>(request, response, {
-        password:
-            process.env.SESSION_SECRET ||
-            "fallback-secret-change-me-immediately-32chars",
+        password: getSessionPassword(),
         cookieName: "mykahfi_session",
     });
 
@@ -50,5 +56,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/dashboard/:path*", "/api/dashboard/:path*", "/api/push/:path*", "/api/messages/:path*"],
+    matcher: [
+        "/dashboard/:path*",
+        "/api/dashboard/:path*",
+        "/api/push/:path*",
+        "/api/messages/:path*",
+    ],
 };

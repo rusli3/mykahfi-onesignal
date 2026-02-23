@@ -1,17 +1,45 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getSession } from "@/lib/session";
+import { hashPassword, isBcryptHash, verifyPassword } from "@/lib/auth";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_ATTEMPT_LIMIT = 5;
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
         const { nis, password } = body;
+        const normalizedNis = String(nis || "").trim();
+        const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+        const rateLimitKey = `login:${ip}:${normalizedNis || "empty"}`;
 
         // Validate input
-        if (!nis || !password) {
+        if (!normalizedNis || !password) {
             return NextResponse.json(
                 { ok: false, error: "NIS dan Password harus diisi." },
                 { status: 400 }
+            );
+        }
+
+        const rateLimit = checkRateLimit(
+            rateLimitKey,
+            LOGIN_ATTEMPT_LIMIT,
+            LOGIN_WINDOW_MS
+        );
+        if (!rateLimit.allowed) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    error: `Terlalu banyak percobaan login. Coba lagi dalam ${rateLimit.retryAfterSec} detik.`,
+                },
+                {
+                    status: 429,
+                    headers: {
+                        "Retry-After": String(rateLimit.retryAfterSec),
+                    },
+                }
             );
         }
 
@@ -19,7 +47,7 @@ export async function POST(request: Request) {
         const { data: user, error } = await supabase
             .from("users")
             .select("nis, password, nama_siswa, jenjang")
-            .eq("nis", String(nis).trim())
+            .eq("nis", normalizedNis)
             .single();
 
         if (error || !user) {
@@ -29,12 +57,21 @@ export async function POST(request: Request) {
             );
         }
 
-        // Compare password (plaintext comparison matching existing Android app)
-        if (user.password !== password) {
+        const isPasswordValid = await verifyPassword(password, user.password);
+        if (!isPasswordValid) {
             return NextResponse.json(
                 { ok: false, error: "NIS atau Password salah." },
                 { status: 401 }
             );
+        }
+
+        // Seamless migration: upgrade plaintext password to bcrypt after successful login.
+        if (!isBcryptHash(user.password)) {
+            const hashedPassword = await hashPassword(password);
+            await supabase
+                .from("users")
+                .update({ password: hashedPassword })
+                .eq("nis", user.nis);
         }
 
         // Save session

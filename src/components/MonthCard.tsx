@@ -3,7 +3,6 @@
 interface MonthCardProps {
     month: {
         code: string;
-        label: string;
         paid: boolean;
     };
     overdue: boolean;
@@ -15,8 +14,8 @@ export default function MonthCard({ month, overdue, onClick }: MonthCardProps) {
 
     return (
         <div className={`month-card ${status}`} onClick={onClick}>
+            {status === "overdue" && <span className="month-overdue-dot" aria-label="Jatuh tempo terlewat" />}
             <div className="month-code">{month.code}</div>
-            <div className="month-label">{month.label}</div>
             <div className="month-status">
                 {month.paid ? "Lunas" : overdue ? "Belum" : "Belum"}
             </div>

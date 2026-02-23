@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import MonthCard from "@/components/MonthCard";
 import TransactionDetail from "@/components/TransactionDetail";
 import SchoolMessage from "@/components/SchoolMessage";
-import PaymentGuide from "@/components/PaymentGuide";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import OneSignalInit from "@/components/OneSignalInit";
 
@@ -18,14 +17,8 @@ interface Transaction {
 
 interface Month {
     code: string;
-    label: string;
     paid: boolean;
     transaction: Transaction | null;
-}
-
-interface Contact {
-    unit: string;
-    nohp: string;
 }
 
 interface DashboardData {
@@ -40,8 +33,20 @@ interface DashboardData {
         isNew: boolean;
     } | null;
     months: Month[];
-    contacts: Contact[];
     error?: string;
+}
+
+const ACADEMIC_MONTH_ORDER = ["AGU", "SEP", "OKT", "NOV", "DES", "JAN", "FEB", "MAR", "APR", "MEI", "JUN"];
+
+function getCurrentAcademicMonthIndex(): number {
+    const currentMonth = new Date().getMonth(); // 0-11
+
+    // August-December maps to 0-4
+    if (currentMonth >= 7) return currentMonth - 7;
+    // January-June maps to 5-10
+    if (currentMonth <= 5) return currentMonth + 5;
+    // July is excluded from AGU-JUN academic year view.
+    return -1;
 }
 
 export default function DashboardPage() {
@@ -50,6 +55,7 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [refreshing, setRefreshing] = useState(false);
+    const [testingPush, setTestingPush] = useState(false);
     const [selectedMonth, setSelectedMonth] = useState<Month | null>(null);
 
     const fetchDashboard = useCallback(async (isRefresh = false) => {
@@ -93,17 +99,39 @@ export default function DashboardPage() {
         }
     }
 
+    async function handleTestPush() {
+        if (!data?.student.nis) return;
+        setTestingPush(true);
+
+        try {
+            const res = await fetch("/api/push/test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nis: data.student.nis }),
+            });
+
+            const json = await res.json();
+            if (!json.ok) {
+                alert(json.error || "Gagal mengirim test notifikasi.");
+                return;
+            }
+
+            alert("Test notifikasi terkirim. Cek notifikasi di perangkat Anda.");
+        } catch {
+            alert("Gagal mengirim test notifikasi.");
+        } finally {
+            setTestingPush(false);
+        }
+    }
+
     // Determine which months are overdue
     function isOverdue(monthCode: string, paid: boolean): boolean {
         if (paid) return false;
-        const currentMonth = new Date().getMonth(); // 0-indexed
-        const monthMap: Record<string, number> = {
-            JAN: 0, FEB: 1, MAR: 2, APR: 3, MEI: 4, JUN: 5,
-            JUL: 6, AGU: 7, SEP: 8, OKT: 9, NOV: 10, DES: 11,
-        };
-        const mIdx = monthMap[monthCode];
-        if (mIdx === undefined) return false;
-        return mIdx <= currentMonth;
+        const academicNow = getCurrentAcademicMonthIndex();
+        if (academicNow < 0) return false;
+        const monthIdx = ACADEMIC_MONTH_ORDER.indexOf(monthCode);
+        if (monthIdx < 0) return false;
+        return monthIdx <= academicNow;
     }
 
     if (loading) {
@@ -168,14 +196,23 @@ export default function DashboardPage() {
                         <span className="icon">📅</span>
                         Status Pembayaran
                     </div>
-                    <button
-                        className={`btn-refresh ${refreshing ? "spinning" : ""}`}
-                        onClick={() => fetchDashboard(true)}
-                        disabled={refreshing}
-                    >
-                        <span className="refresh-icon">↻</span>
-                        {refreshing ? "Memuat..." : "Refresh"}
-                    </button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                            className={`btn-refresh ${refreshing ? "spinning" : ""}`}
+                            onClick={() => fetchDashboard(true)}
+                            disabled={refreshing}
+                        >
+                            <span className="refresh-icon">↻</span>
+                            {refreshing ? "Memuat..." : "Refresh"}
+                        </button>
+                        <button
+                            className="btn-refresh"
+                            onClick={handleTestPush}
+                            disabled={testingPush}
+                        >
+                            {testingPush ? "Mengirim..." : "Test Notif"}
+                        </button>
+                    </div>
                 </div>
 
                 <div className="month-grid">
@@ -188,13 +225,6 @@ export default function DashboardPage() {
                         />
                     ))}
                 </div>
-
-                {/* Payment Guide & Contacts */}
-                <div className="section-title">
-                    <span className="icon">📋</span>
-                    Cara Pembayaran
-                </div>
-                <PaymentGuide contacts={data.contacts} />
             </div>
 
             {/* Transaction Detail Modal */}

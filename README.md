@@ -53,7 +53,9 @@ src/
 │   ├── supabase.ts             # Supabase client (server-side)
 │   ├── session.ts              # Manajemen session
 │   └── onesignal.ts            # OneSignal REST API helper
-└── middleware.ts               # Proteksi route
+├── proxy.ts                    # Proteksi route
+└── ../scripts/
+    └── migrate-passwords.mjs   # Migrasi password plaintext -> bcrypt
 ```
 
 ## 🚀 Quick Start
@@ -109,6 +111,24 @@ npm run dev
 ```
 
 Buka [http://localhost:3000](http://localhost:3000)
+
+### 5. Migrasi password legacy (wajib untuk hardening auth)
+
+Dry run dulu (tanpa update data):
+
+```bash
+npm run migrate:passwords -- --dry-run
+```
+
+Eksekusi migrasi:
+
+```bash
+npm run migrate:passwords
+```
+
+Opsi tambahan:
+- `--batch-size 200` (default `200`)
+- `--limit 1000` (batasi jumlah akun yang diproses per eksekusi)
 
 ## 🔑 Cara Mendapatkan API Keys
 
@@ -167,9 +187,12 @@ Atau connect repository Git ke [vercel.com](https://vercel.com) untuk auto-deplo
 ## 🔒 Keamanan
 
 - Session menggunakan **httpOnly cookie** (tidak bisa diakses JavaScript di browser)
+- `SESSION_SECRET` wajib terisi (minimal 32 karakter), aplikasi akan fail-fast jika tidak valid
 - Semua data diakses melalui **BFF route** (browser tidak akses Supabase langsung)
 - `SUPABASE_SERVICE_ROLE_KEY` hanya ada di server — tidak pernah expose ke client
-- Route `/dashboard` dan API dilindungi **middleware** — redirect ke login jika session expired
+- Login sudah menggunakan **bcrypt hash** (kompatibel migrasi dari data plaintext lama)
+- Endpoint login dilindungi **rate limit** untuk mengurangi brute-force
+- Route `/dashboard` dan API dilindungi **proxy** — redirect ke login jika session expired
 
 ## 📄 Lisensi
 
