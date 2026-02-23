@@ -6,7 +6,7 @@ import MonthCard from "@/components/MonthCard";
 import TransactionDetail from "@/components/TransactionDetail";
 import SchoolMessage from "@/components/SchoolMessage";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
-import OneSignalInit from "@/components/OneSignalInit";
+import OneSignalInit, { OneSignalDebugStatus } from "@/components/OneSignalInit";
 
 interface Transaction {
     idtrx: number;
@@ -94,6 +94,10 @@ export default function DashboardPage() {
     const [refreshing, setRefreshing] = useState(false);
     const [testingPush, setTestingPush] = useState(false);
     const [selectedMonth, setSelectedMonth] = useState<Month | null>(null);
+    const [pushStatus, setPushStatus] = useState<OneSignalDebugStatus>({
+        stage: "idle",
+        message: "Menunggu inisialisasi push...",
+    });
 
     const fetchDashboard = useCallback(async (isRefresh = false) => {
         if (isRefresh) setRefreshing(true);
@@ -215,7 +219,7 @@ export default function DashboardPage() {
 
     return (
         <>
-            <OneSignalInit nis={data.student.nis} />
+            <OneSignalInit nis={data.student.nis} onStatusChange={setPushStatus} />
 
             {/* Header */}
             <header className="header">
@@ -278,6 +282,20 @@ export default function DashboardPage() {
                             onClick={() => setSelectedMonth(month)}
                         />
                     ))}
+                </div>
+
+                <div className="guide-card" style={{ marginTop: 8 }}>
+                    <div className="guide-title">Debug Push</div>
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                        <div>Stage: <strong>{pushStatus.stage}</strong></div>
+                        <div>Permission: <strong>{pushStatus.permission || "-"}</strong></div>
+                        <div>
+                            Subscription:
+                            <strong> {pushStatus.subscriptionId ? `${pushStatus.subscriptionId.slice(0, 6)}...` : "-"}</strong>
+                        </div>
+                        <div>Info: {pushStatus.message}</div>
+                        {pushStatus.detail && <div>Detail: {pushStatus.detail}</div>}
+                    </div>
                 </div>
             </div>
 

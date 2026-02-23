@@ -5,6 +5,23 @@ import type { SubscriptionChangeEvent } from "react-onesignal";
 
 interface OneSignalInitProps {
     nis: string;
+    onStatusChange?: (status: OneSignalDebugStatus) => void;
+}
+
+export interface OneSignalDebugStatus {
+    stage:
+        | "idle"
+        | "skipped"
+        | "loading_sdk"
+        | "initialized"
+        | "logged_in"
+        | "subscription_ready"
+        | "registered"
+        | "error";
+    message: string;
+    permission?: NotificationPermission | "unsupported";
+    subscriptionId?: string | null;
+    detail?: string;
 }
 
 function detectPlatform(): string {
@@ -27,18 +44,77 @@ function canInitializeOneSignal(): boolean {
     return isHttps || isLocalhost;
 }
 
-export default function OneSignalInit({ nis }: OneSignalInitProps) {
+export default function OneSignalInit({ nis, onStatusChange }: OneSignalInitProps) {
     const initialized = useRef(false);
 
     useEffect(() => {
+        const emitStatus = (status: OneSignalDebugStatus) => {
+            if (onStatusChange) onStatusChange(status);
+        };
+
         if (initialized.current) return;
         initialized.current = true;
         let mounted = true;
         let cleanupSubscriptionListener: (() => void) | null = null;
 
+        async function registerDevice(subscriptionId: string) {
+            try {
+                const res = await fetch("/api/push/register-device", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        nis,
+                        onesignal_subscription_id: subscriptionId,
+                        platform: detectPlatform(),
+                        external_id: nis,
+                    }),
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok || !json.ok) {
+                    emitStatus({
+                        stage: "error",
+                        message: "Gagal register perangkat ke backend.",
+                        permission:
+                            typeof Notification !== "undefined"
+                                ? Notification.permission
+                                : "unsupported",
+                        subscriptionId,
+                        detail: json.error || `HTTP ${res.status}`,
+                    });
+                    return;
+                }
+                emitStatus({
+                    stage: "registered",
+                    message: "Perangkat berhasil didaftarkan.",
+                    permission:
+                        typeof Notification !== "undefined"
+                            ? Notification.permission
+                            : "unsupported",
+                    subscriptionId,
+                });
+            } catch (err) {
+                console.error("[OneSignal] Device register error:", err);
+                emitStatus({
+                    stage: "error",
+                    message: "Error saat register perangkat.",
+                    permission:
+                        typeof Notification !== "undefined"
+                            ? Notification.permission
+                            : "unsupported",
+                    subscriptionId,
+                    detail: err instanceof Error ? err.message : "unknown",
+                });
+            }
+        }
+
         const appId = process.env.NEXT_PUBLIC_ONESIGNAL_APP_ID;
         if (!appId || appId === "your-onesignal-app-id") {
             console.log("[OneSignal] App ID not configured, skipping init.");
+            emitStatus({
+                stage: "skipped",
+                message: "OneSignal App ID belum dikonfigurasi.",
+                permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+            });
             return;
         }
 
@@ -46,11 +122,22 @@ export default function OneSignalInit({ nis }: OneSignalInitProps) {
             console.warn(
                 "[OneSignal] Skipping init: OneSignal v16 requires HTTPS (except localhost)."
             );
+            emitStatus({
+                stage: "skipped",
+                message: "OneSignal hanya bisa di HTTPS atau localhost.",
+                permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+            });
             return;
         }
 
         async function initOneSignal() {
             try {
+                emitStatus({
+                    stage: "loading_sdk",
+                    message: "Memuat SDK OneSignal...",
+                    permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+                });
+
                 // Dynamically load OneSignal SDK
                 const OneSignalModule = await import("react-onesignal");
                 const OneSignal = OneSignalModule.default;
@@ -61,21 +148,37 @@ export default function OneSignalInit({ nis }: OneSignalInitProps) {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     notifyButton: { enable: false } as any,
                 });
+                emitStatus({
+                    stage: "initialized",
+                    message: "SDK OneSignal berhasil diinisialisasi.",
+                    permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+                });
 
                 // Set external user ID
                 await OneSignal.login(nis);
+                emitStatus({
+                    stage: "logged_in",
+                    message: "OneSignal login external_id berhasil.",
+                    permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+                });
 
                 // Get subscription ID and register device
                 const subscriptionId = await OneSignal.User.PushSubscription.id;
                 if (subscriptionId && mounted) {
-                    await registerDevice(nis, subscriptionId);
+                    emitStatus({
+                        stage: "subscription_ready",
+                        message: "Subscription ID ditemukan.",
+                        permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+                        subscriptionId,
+                    });
+                    await registerDevice(subscriptionId);
                 }
 
                 // Listen for subscription changes
                 const handleSubscriptionChange = async (event: SubscriptionChangeEvent) => {
                     const newId = event.current?.id;
                     if (newId && mounted) {
-                        await registerDevice(nis, newId);
+                        await registerDevice(newId);
                     }
                 };
                 OneSignal.User.PushSubscription.addEventListener("change", handleSubscriptionChange);
@@ -89,6 +192,15 @@ export default function OneSignalInit({ nis }: OneSignalInitProps) {
                 console.log("[OneSignal] Initialized successfully for NIS:", nis);
             } catch (err) {
                 console.error("[OneSignal] Init error:", err);
+                emitStatus({
+                    stage: "error",
+                    message: "Inisialisasi OneSignal gagal.",
+                    permission:
+                        typeof Notification !== "undefined"
+                            ? Notification.permission
+                            : "unsupported",
+                    detail: err instanceof Error ? err.message : "unknown",
+                });
             }
         }
 
@@ -98,24 +210,7 @@ export default function OneSignalInit({ nis }: OneSignalInitProps) {
             mounted = false;
             if (cleanupSubscriptionListener) cleanupSubscriptionListener();
         };
-    }, [nis]);
-
-    async function registerDevice(nis: string, subscriptionId: string) {
-        try {
-            await fetch("/api/push/register-device", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    nis,
-                    onesignal_subscription_id: subscriptionId,
-                    platform: detectPlatform(),
-                    external_id: nis,
-                }),
-            });
-        } catch (err) {
-            console.error("[OneSignal] Device register error:", err);
-        }
-    }
+    }, [nis, onStatusChange]);
 
     return null; // This component only runs effects, no UI
 }
