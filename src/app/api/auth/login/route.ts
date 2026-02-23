@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { getSession } from "@/lib/session";
-import { hashPassword, isBcryptHash, verifyPassword } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -57,21 +56,12 @@ export async function POST(request: Request) {
             );
         }
 
-        const isPasswordValid = await verifyPassword(password, user.password);
-        if (!isPasswordValid) {
+        // Plaintext password comparison (as requested).
+        if (user.password !== password) {
             return NextResponse.json(
                 { ok: false, error: "NIS atau Password salah." },
                 { status: 401 }
             );
-        }
-
-        // Seamless migration: upgrade plaintext password to bcrypt after successful login.
-        if (!isBcryptHash(user.password)) {
-            const hashedPassword = await hashPassword(password);
-            await supabase
-                .from("users")
-                .update({ password: hashedPassword })
-                .eq("nis", user.nis);
         }
 
         // Save session

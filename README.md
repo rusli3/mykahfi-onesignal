@@ -87,6 +87,7 @@ SUPABASE_URL=https://<project-id>.supabase.co
 SUPABASE_ANON_KEY=<dari Supabase → Settings → API → anon key>
 SUPABASE_SERVICE_ROLE_KEY=<dari Supabase → Settings → API → service_role key>
 ONESIGNAL_REST_API_KEY=<dari OneSignal dashboard → Settings → Keys & IDs>
+SUPABASE_WEBHOOK_SECRET=<shared secret untuk webhook DB -> Vercel>
 SESSION_SECRET=<random string 32+ karakter, generate: openssl rand -base64 32>
 APP_ENV=development
 ```
@@ -103,6 +104,10 @@ Tabel yang dibuat:
 - `user_devices_web` — data device web untuk push notification
 - `notification_logs` — log pengiriman notifikasi
 - `user_login_audit` — audit trail login (jika belum ada)
+
+Aktifkan trigger notifikasi pesan sekolah (`users.msg_app`) dengan SQL berikut:
+- `sql/enable_msg_app_trigger.sql`
+- Ganti placeholder `<VERCEL_APP_URL>` dan `<SUPABASE_WEBHOOK_SECRET>` sebelum execute.
 
 ### 4. Jalankan development server
 
@@ -182,6 +187,7 @@ Atau connect repository Git ke [vercel.com](https://vercel.com) untuk auto-deplo
 | POST | `/api/auth/logout` | Logout & clear session |
 | GET | `/api/dashboard` | Data dashboard (protected) |
 | POST | `/api/push/register-device` | Registrasi device push |
+| POST | `/api/push/notify-message` | Webhook internal perubahan `users.msg_app` |
 | POST | `/api/messages/mark-read` | Tandai pesan dibaca |
 
 ## 🔒 Keamanan
