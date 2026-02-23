@@ -41,30 +41,66 @@ export async function POST(request: Request) {
             );
         }
 
-        // Upsert device to user_devices_web
-        const { error: upsertError } = await supabase
+        const nowIso = new Date().toISOString();
+
+        // Tolerant sync strategy:
+        // 1) find by subscription+platform
+        // 2) update if exists, else insert
+        const { data: existing, error: lookupError } = await supabase
             .from("user_devices_web")
-            .upsert(
-                {
+            .select("id")
+            .eq("onesignal_subscription_id", onesignal_subscription_id)
+            .eq("platform", platform)
+            .limit(1)
+            .maybeSingle();
+
+        if (lookupError) {
+            console.error("Device lookup error:", lookupError);
+            return NextResponse.json(
+                { ok: false, error: "Gagal memeriksa perangkat.", detail: lookupError.message },
+                { status: 503 }
+            );
+        }
+
+        if (existing?.id) {
+            const { error: updateError } = await supabase
+                .from("user_devices_web")
+                .update({
+                    nis,
+                    external_id: external_id || nis,
+                    is_active: true,
+                    last_seen_at: nowIso,
+                    updated_at: nowIso,
+                })
+                .eq("id", existing.id);
+
+            if (updateError) {
+                console.error("Device update error:", updateError);
+                return NextResponse.json(
+                    { ok: false, error: "Gagal memperbarui perangkat.", detail: updateError.message },
+                    { status: 503 }
+                );
+            }
+        } else {
+            const { error: insertError } = await supabase
+                .from("user_devices_web")
+                .insert({
                     nis,
                     onesignal_subscription_id,
                     external_id: external_id || nis,
                     platform,
                     is_active: true,
-                    last_seen_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                },
-                {
-                    onConflict: "onesignal_subscription_id,platform",
-                }
-            );
+                    last_seen_at: nowIso,
+                    updated_at: nowIso,
+                });
 
-        if (upsertError) {
-            console.error("Device upsert error:", upsertError);
-            return NextResponse.json(
-                { ok: false, error: "Gagal mendaftarkan perangkat." },
-                { status: 503 }
-            );
+            if (insertError) {
+                console.error("Device insert error:", insertError);
+                return NextResponse.json(
+                    { ok: false, error: "Gagal mendaftarkan perangkat.", detail: insertError.message },
+                    { status: 503 }
+                );
+            }
         }
 
         // Set external_id on OneSignal
