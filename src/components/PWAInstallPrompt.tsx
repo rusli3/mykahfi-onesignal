@@ -45,11 +45,11 @@ export default function PWAInstallPrompt() {
             <h3>📲 Pasang Aplikasi MyKahfi-WEB</h3>
             {isIOS ? (
                 <p>
-                    Tap tombol <strong>Share</strong> (ikon kotak dengan panah ke atas) di bagian bawah Safari, lalu pilih <strong>&quot;Add to Home Screen&quot;</strong> untuk mendapatkan notifikasi pembayaran secara real-time.
+                    Tap tombol <strong>Share</strong> (ikon kotak dengan panah ke atas) di bagian bawah Safari, lalu pilih <strong>&quot;Add to Home Screen&quot;</strong> agar aplikasi lebih cepat diakses.
                 </p>
             ) : (
                 <p>
-                    Tap tombol <strong>Menu (⋮)</strong> di browser, lalu pilih <strong>&quot;Install app&quot;</strong> atau <strong>&quot;Add to Home Screen&quot;</strong> untuk pengalaman terbaik dan notifikasi push.
+                    Tap tombol <strong>Menu (⋮)</strong> di browser, lalu pilih <strong>&quot;Install app&quot;</strong> atau <strong>&quot;Add to Home Screen&quot;</strong> untuk pengalaman terbaik.
                 </p>
             )}
         </div>

@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     try {
         const body = await request.json();
         const { nis, password } = body;
-        const normalizedNis = String(nis || "").trim();
+        const normalizedNis = String(nis || "").replace(/\D/g, "").trim();
         const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
         const rateLimitKey = `login:${ip}:${normalizedNis || "empty"}`;
 
@@ -18,6 +18,13 @@ export async function POST(request: Request) {
         if (!normalizedNis || !password) {
             return NextResponse.json(
                 { ok: false, error: "NIS dan Password harus diisi." },
+                { status: 400 }
+            );
+        }
+
+        if (!/^\d{6}$/.test(normalizedNis)) {
+            return NextResponse.json(
+                { ok: false, error: "NIS/VA harus 6 digit angka." },
                 { status: 400 }
             );
         }

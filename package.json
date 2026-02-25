@@ -6,17 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
-    "migrate:passwords": "node scripts/migrate-passwords.mjs"
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
-    "bcryptjs": "^3.0.3",
     "iron-session": "^8.0.4",
     "next": "^16.1.6",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "react-onesignal": "^3.4.6"
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
     "@types/node": "^25.3.0",

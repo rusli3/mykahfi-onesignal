@@ -33,11 +33,6 @@ interface PaymentRow {
     sortasi: number | null;
 }
 
-interface LatestMessageRow {
-    message_text: string | null;
-    created_at: string;
-}
-
 async function fetchPaymentRows(nis: string): Promise<{
     rows: PaymentRow[];
     usedRpc: boolean;
@@ -74,58 +69,29 @@ async function fetchPaymentRows(nis: string): Promise<{
 
 async function fetchLatestSchoolMessage(nis: string): Promise<{
     text: string | null;
-    source: "user_messages_web" | "users.msg_app" | "none";
-    tableMissing: boolean;
+    source: "users.msg_app" | "none";
 }> {
-    const latestMessageResult = await supabase
-        .from("user_messages_web")
-        .select("message_text, created_at")
-        .eq("nis", nis)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-    if (latestMessageResult.error && latestMessageResult.error.code !== "42P01") {
-        console.warn("Dashboard message table query error:", latestMessageResult.error.message);
-    }
-
-    const messageRow = latestMessageResult.data as LatestMessageRow | null;
-    const messageText = String(messageRow?.message_text || "").trim();
-    if (messageText) {
-        return {
-            text: messageText,
-            source: "user_messages_web",
-            tableMissing: false,
-        };
-    }
-
-    const tableMissing = latestMessageResult.error?.code === "42P01";
-
-    // Transitional fallback for existing deployments that still use users.msg_app.
-    const legacyMessageResult = await supabase
+    const messageResult = await supabase
         .from("users")
         .select("msg_app")
         .eq("nis", nis)
         .single();
 
-    if (legacyMessageResult.error) {
-        throw new Error(`Legacy message query failed: ${legacyMessageResult.error.message}`);
+    if (messageResult.error) {
+        throw new Error(`Message query failed: ${messageResult.error.message}`);
     }
 
-    const legacyText = String(legacyMessageResult.data?.msg_app || "").trim();
-    if (legacyText) {
+    const messageText = String(messageResult.data?.msg_app || "").trim();
+    if (messageText) {
         return {
-            text: legacyText,
+            text: messageText,
             source: "users.msg_app",
-            tableMissing,
         };
     }
 
     return {
         text: null,
         source: "none",
-        tableMissing,
     };
 }
 
@@ -149,11 +115,7 @@ export async function GET(request: Request) {
             fetchPaymentRows(nis),
         ]);
 
-        const {
-            text: messageText,
-            source: messageSource,
-            tableMissing: messageTableMissing,
-        } = messageResult;
+        const { text: messageText, source: messageSource } = messageResult;
         const { rows: transactions, usedRpc, fallbackError } = paymentResult;
 
         if (!usedRpc && fallbackError) {
@@ -207,14 +169,13 @@ export async function GET(request: Request) {
         const message = messageText
             ? {
                 text: messageText,
-                isNew: true,
             }
             : null;
 
         const response: {
             ok: boolean;
             student: { nis: string; nama_siswa: string; jenjang: string };
-            message: { text: string; isNew: boolean } | null;
+            message: { text: string } | null;
             months: typeof months;
             debug?: {
                 mapping: Array<{
@@ -232,7 +193,6 @@ export async function GET(request: Request) {
                     nominal: number;
                 }>;
                 message_source: string;
-                message_table_missing: boolean;
             };
         } = {
             ok: true,
@@ -269,7 +229,6 @@ export async function GET(request: Request) {
                     };
                 }),
                 message_source: messageSource,
-                message_table_missing: messageTableMissing,
             };
         }
 

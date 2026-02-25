@@ -6,7 +6,7 @@ import MonthCard from "@/components/MonthCard";
 import TransactionDetail from "@/components/TransactionDetail";
 import SchoolMessage from "@/components/SchoolMessage";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
-import OneSignalInit, { OneSignalDebugStatus } from "@/components/OneSignalInit";
+import PaymentGuide from "@/components/PaymentGuide";
 
 interface Transaction {
     idtrx: number;
@@ -30,7 +30,6 @@ interface DashboardData {
     };
     message: {
         text: string;
-        isNew: boolean;
     } | null;
     months: Month[];
     error?: string;
@@ -91,26 +90,18 @@ export default function DashboardPage() {
     const [data, setData] = useState<DashboardData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [refreshing, setRefreshing] = useState(false);
-    const [testingPush, setTestingPush] = useState(false);
     const [selectedMonth, setSelectedMonth] = useState<Month | null>(null);
-    const [pushStatus, setPushStatus] = useState<OneSignalDebugStatus>({
-        stage: "idle",
-        message: "Menunggu inisialisasi push...",
-    });
+    const [showPaymentGuide, setShowPaymentGuide] = useState(false);
 
-    const fetchDashboard = useCallback(async (isRefresh = false) => {
-        if (isRefresh) setRefreshing(true);
-        else setLoading(true);
+    const fetchDashboard = useCallback(async () => {
+        setLoading(true);
         setError("");
 
-        if (!isRefresh) {
-            const cached = readDashboardCache();
-            if (cached) {
-                setData(cached);
-                setLoading(false);
-                return;
-            }
+        const cached = readDashboardCache();
+        if (cached) {
+            setData(cached);
+            setLoading(false);
+            return;
         }
 
         try {
@@ -134,7 +125,6 @@ export default function DashboardPage() {
             setError("Gagal memuat data. Periksa koneksi internet Anda.");
         } finally {
             setLoading(false);
-            setRefreshing(false);
         }
     }, [router]);
 
@@ -150,35 +140,6 @@ export default function DashboardPage() {
         } catch {
             clearDashboardCache();
             router.push("/login");
-        }
-    }
-
-    async function handleTestPush() {
-        if (!data?.student.nis) return;
-        setTestingPush(true);
-
-        try {
-            const res = await fetch("/api/push/test", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nis: data.student.nis }),
-            });
-
-            const json = await res.json();
-            if (!json.ok) {
-                const attempt = json.onesignal_attempt;
-                const attemptInfo = attempt
-                    ? `\nEndpoint: ${attempt.endpoint}\nAuth: ${attempt.authScheme}\nStatus: ${attempt.status ?? "-"}`
-                    : "";
-                alert((json.error || "Gagal mengirim test notifikasi.") + attemptInfo);
-                return;
-            }
-
-            alert("Test notifikasi terkirim. Cek notifikasi di perangkat Anda.");
-        } catch {
-            alert("Gagal mengirim test notifikasi.");
-        } finally {
-            setTestingPush(false);
         }
     }
 
@@ -219,8 +180,6 @@ export default function DashboardPage() {
 
     return (
         <>
-            <OneSignalInit nis={data.student.nis} onStatusChange={setPushStatus} />
-
             {/* Header */}
             <header className="header">
                 <div className="header-top">
@@ -244,7 +203,7 @@ export default function DashboardPage() {
                 {/* School Message */}
                 <div className="section-title">
                     <span className="icon">💬</span>
-                    Pesan Sekolah
+                    Pesan
                 </div>
                 <SchoolMessage message={data.message} nis={data.student.nis} />
 
@@ -256,25 +215,10 @@ export default function DashboardPage() {
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                         <button
-                            className={`btn-refresh ${refreshing ? "spinning" : ""}`}
-                            onClick={() => fetchDashboard(true)}
-                            disabled={refreshing}
+                            className="btn-pay-guide"
+                            onClick={() => setShowPaymentGuide(true)}
                         >
-                            <span className="refresh-icon">↻</span>
-                            {refreshing ? "Memuat..." : "Refresh"}
-                        </button>
-                        <button
-                            className="btn-refresh"
-                            onClick={handleTestPush}
-                            disabled={testingPush}
-                        >
-                            {testingPush ? "Mengirim..." : "Test Notif"}
-                        </button>
-                        <button
-                            className="btn-refresh"
-                            onClick={() => window.dispatchEvent(new Event("mykahfi:enable-push"))}
-                        >
-                            Aktifkan Push
+                            Cara Bayar
                         </button>
                     </div>
                 </div>
@@ -289,26 +233,6 @@ export default function DashboardPage() {
                         />
                     ))}
                 </div>
-
-                <div className="guide-card" style={{ marginTop: 8 }}>
-                    <div className="guide-title">Debug Push</div>
-                    <div style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.5 }}>
-                        <div>Stage: <strong>{pushStatus.stage}</strong></div>
-                        <div>Permission: <strong>{pushStatus.permission || "-"}</strong></div>
-                        <div>Supported: <strong>{pushStatus.supported === undefined ? "-" : String(pushStatus.supported)}</strong></div>
-                        <div>Opted-in: <strong>{pushStatus.optedIn === undefined ? "-" : String(pushStatus.optedIn)}</strong></div>
-                        <div>
-                            OneSignal ID:
-                            <strong> {pushStatus.onesignalId ? `${pushStatus.onesignalId.slice(0, 6)}...` : "-"}</strong>
-                        </div>
-                        <div>
-                            Subscription:
-                            <strong> {pushStatus.subscriptionId ? `${pushStatus.subscriptionId.slice(0, 6)}...` : "-"}</strong>
-                        </div>
-                        <div>Info: {pushStatus.message}</div>
-                        {pushStatus.detail && <div>Detail: {pushStatus.detail}</div>}
-                    </div>
-                </div>
             </div>
 
             {/* Transaction Detail Modal */}
@@ -318,6 +242,11 @@ export default function DashboardPage() {
                     onClose={() => setSelectedMonth(null)}
                 />
             )}
+            <PaymentGuide
+                open={showPaymentGuide}
+                onClose={() => setShowPaymentGuide(false)}
+                nis={data.student.nis}
+            />
         </>
     );
 }

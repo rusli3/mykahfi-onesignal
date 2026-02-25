@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 interface SchoolMessageProps {
     message: {
         text: string;
-        isNew: boolean;
     } | null;
     nis: string;
 }
