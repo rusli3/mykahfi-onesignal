@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { sendNotification } from "@/lib/onesignal";
 import { supabase } from "@/lib/supabase";
 
+type MessageRecord = {
+    nis?: string;
+    msg_app?: string | null;
+    message_text?: string | null;
+    message?: string | null;
+    text?: string | null;
+};
+
 type WebhookPayload = {
     type?: string;
     table?: string;
@@ -9,34 +17,20 @@ type WebhookPayload = {
     nis?: string;
     msg_app?: string | null;
     // some trigger/webhook formats
-    new?: {
-        nis?: string;
-        msg_app?: string | null;
-    };
-    new_record?: {
-        nis?: string;
-        msg_app?: string | null;
-    };
-    old?: {
-        msg_app?: string | null;
-    };
-    record?: {
-        nis?: string;
-        msg_app?: string | null;
-    };
-    old_record?: {
-        msg_app?: string | null;
-    };
+    new?: MessageRecord;
+    new_record?: MessageRecord;
+    old?: MessageRecord;
+    record?: MessageRecord;
+    old_record?: MessageRecord;
     payload?: {
         nis?: string;
         msg_app?: string | null;
-        record?: {
-            nis?: string;
-            msg_app?: string | null;
-        };
-        old_record?: {
-            msg_app?: string | null;
-        };
+        message_text?: string | null;
+        message?: string | null;
+        text?: string | null;
+        table?: string;
+        record?: MessageRecord;
+        old_record?: MessageRecord;
     };
 };
 
@@ -59,6 +53,22 @@ function toNotificationBody(message: string): string {
     const clean = message.replace(/\s+/g, " ").trim();
     if (clean.length <= 120) return clean;
     return `${clean.slice(0, 117)}...`;
+}
+
+function pickMessage(record: MessageRecord | undefined): string {
+    if (!record) return "";
+    return normalizeMessage(
+        record.msg_app ?? record.message_text ?? record.message ?? record.text
+    );
+}
+
+function detectMessageField(record: MessageRecord | undefined): string {
+    if (!record) return "msg_app";
+    if (record.message_text !== undefined) return "message_text";
+    if (record.msg_app !== undefined) return "msg_app";
+    if (record.message !== undefined) return "message";
+    if (record.text !== undefined) return "text";
+    return "msg_app";
 }
 
 function parseBearerToken(authorizationHeader: string): string {
@@ -116,20 +126,24 @@ export async function POST(request: Request) {
             ? payload.payload
             : undefined;
 
-        const record =
+        const record: MessageRecord =
             envelope?.record ||
             payload.record ||
             payload.new_record ||
             payload.new ||
             envelope ||
             payload;
-        const oldRecord = envelope?.old_record || payload.old_record || payload.old || {};
+        const oldRecord: MessageRecord =
+            envelope?.old_record || payload.old_record || payload.old || {};
 
         const nis = String(record.nis || payload.nis || envelope?.nis || "").trim();
-        const newMessage = normalizeMessage(
-            record.msg_app ?? payload.msg_app ?? envelope?.msg_app
-        );
-        const oldMessage = normalizeMessage(oldRecord.msg_app);
+        const payloadMessage = pickMessage(payload);
+        const envelopeMessage = pickMessage(envelope);
+        const newMessage =
+            pickMessage(record) || payloadMessage || envelopeMessage;
+        const oldMessage = pickMessage(oldRecord);
+        const webhookTable = String(payload.table || envelope?.table || "").trim() || null;
+        const messageField = detectMessageField(record);
 
         if (!nis) {
             return NextResponse.json({ ok: true, skipped: "missing_nis" });
@@ -169,9 +183,14 @@ export async function POST(request: Request) {
             provider_message_id: sendResult.id || null,
             error_message: sendResult.success ? null : sendResult.error || "Unknown error",
             payload: {
-                source: "users.msg_app",
+                source:
+                    webhookTable
+                        ? `${webhookTable}.${messageField}`
+                        : messageField === "msg_app"
+                            ? "users.msg_app"
+                            : `user_messages_web.${messageField}`,
                 webhook_type: payload.type || null,
-                webhook_table: payload.table || null,
+                webhook_table: webhookTable,
                 body_preview: toNotificationBody(newMessage),
             },
         });
